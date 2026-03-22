@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: write-like-me-linux-x86_64.tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: write-like-me-macos-aarch64.tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: write-like-me-macos-x86_64.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: write-like-me-windows-x86_64.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: tar czf ${{ matrix.artifact }} -C target/${{ matrix.target }}/release write-like-me
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path target/${{ matrix.target }}/release/write-like-me.exe -DestinationPath ${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            write-like-me-linux-x86_64.tar.gz
+            write-like-me-macos-aarch64.tar.gz
+            write-like-me-macos-x86_64.tar.gz
+            write-like-me-windows-x86_64.zip
